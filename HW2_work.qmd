@@ -1,0 +1,134 @@
+---
+title: "HW1"
+author: "Michelle Hernandez"
+format:
+  html:
+    embed-resources: true
+editor: visual
+---
+
+```{r}
+library(data.table)
+library(leaflet)
+library(ggplot2)
+library(dplyr)
+library(wesanderson)
+```
+
+Read in data
+
+```{r}
+read_csv_individual = read.csv('/Users/michellehernandez/Desktop/DataScience/HW2/chs_individual.csv')
+individual_dat = data.table(read_csv_individual)
+
+read_csv_region = read.csv('/Users/michellehernandez/Desktop/DataScience/HW2/chs_regional.csv')
+region_dat = data.table(read_csv_region)
+```
+
+```{r}
+length(individual_dat$sid)
+# 1200 , there are 1200 subjects
+str(region_dat)
+#Classes ‘data.table’ and 'data.frame':	12 obs. of  27 variables
+
+str(individual_dat)
+#Classes ‘data.table’ and 'data.frame':	1200 obs. of  23 variables:
+```
+
+merge
+
+```{r}
+dat <- merge(individual_dat, region_dat, by= 'townname')
+str(dat)
+# Classes ‘data.table’ and 'data.frame':	1200 obs. of  49 variables
+```
+
+## NEED TO IMPUTE STILL
+
+dat\[, temp_imp := fcoalesce(temp, mean(temp, na.rm = TRUE)),
+ by = .(STATE, year, month, day)\]
+
+```{r}
+dat[, temp_imp := fcoalesce(temp, mean(temp, na.rm = TRUE)),
+    by = .(STATE, year, month, day)]
+```
+
+### bmi categories
+
+```{r}
+# works but need to update after imputation
+dat <- dat %>%
+  mutate(
+    obesity_level = case_when(
+           bmi < 14 ~ 'underweight',
+           bmi >= 14 & bmi < 22 ~ 'normal',
+           bmi >=22 & bmi < 24 ~ 'overweight',
+           bmi >= 24 ~ 'obese',
+           TRUE ~ 'NA'
+         )) %>%
+  collect()
+dat
+```
+
+smoke_gas_exposure
+
+smoke 1: exposed to second hand smoke in home , 0: not exposed
+
+gas stove 1: presence of gas stove in home 0: not in home
+
+```{r}
+dat <- dat %>%
+  mutate(
+    smoke_gas_exposure = case_when(
+           smoke ==1 & gasstove==1 ~ 'exp_both',
+           smoke ==1 & gasstove==0 ~ 'exp_smoke',
+           smoke ==0 & gasstove==1 ~ 'exp_gas',
+           smoke ==0 & gasstove==0 ~ 'exp_none',
+           TRUE ~ 'NA'
+         )) 
+
+
+
+```
+
+```{r}
+ggplot(dat, aes(x=bmi, y=fev)) +
+  geom_point() +
+  geom_smooth(method="lm") +
+  facet_wrap(~townname, nrow=3) 
+
+```
+
+```{r}
+ggplot(dat, aes(x=fev, fill=obesity_level)) +
+  geom_histogram() +
+  scale_fill_brewer(palette = 'Purples')
+```
+
+```{r}
+ggplot(dat, aes(x=fev, fill=smoke_gas_exposure)) +
+  geom_histogram() +
+  scale_fill_brewer(palette = 'PRGn')
+```
+
+```{r}
+ggplot(dat, aes(x=smoke_gas_exposure, y=bmi, fill=as.factor(smoke_gas_exposure))) +
+#  geom_bar(stat = "identity") +
+  geom_bar(stat = "summary", fill = "dodgerblue" ) +
+#  scale_fill_brewer(palette = "Set1") +
+  labs(
+    title = "BMI by Smoke/Gas Exposure",
+    x = "Smoke/Gas Exposure",
+    y = "Mean BMI"
+  ) +
+    theme_minimal()
+```
+
+```{r}
+ggplot(dat, aes(x=fev, y=pm25_mass)) +
+  geom_point()
+```
+
+```{r}
+dat
+```
