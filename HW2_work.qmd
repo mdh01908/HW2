@@ -12,20 +12,24 @@ library(data.table)
 library(leaflet)
 library(ggplot2)
 library(dplyr)
-library(wesanderson)
+library(DescTools)
 ```
 
 Read in data
 
 ```{r}
-read_csv_individual = read.csv('/Users/michellehernandez/Desktop/DataScience/HW2/chs_individual.csv')
+#| echo: false
+read_csv_individual = read.csv('/Users/michellehernandez/Desktop/DataScience/HW2/HW2/chs_individual.csv')
 individual_dat = data.table(read_csv_individual)
-
-read_csv_region = read.csv('/Users/michellehernandez/Desktop/DataScience/HW2/chs_regional.csv')
+#dimensions for individual_dat 1200 x 23
+read_csv_region = read.csv('/Users/michellehernandez/Desktop/DataScience/HW2/HW2/chs_regional.csv')
 region_dat = data.table(read_csv_region)
+
+#dimensions for read_csv_individual 1200 x 23
 ```
 
 ```{r}
+#| echo: false
 length(individual_dat$sid)
 # 1200 , there are 1200 subjects
 str(region_dat)
@@ -35,28 +39,95 @@ str(individual_dat)
 #Classes ‘data.table’ and 'data.frame':	1200 obs. of  23 variables:
 ```
 
-merge
+merge & explore data. We can see after merging that there are 1200 rows and 49 variables as expected.
 
 ```{r}
+
 dat <- merge(individual_dat, region_dat, by= 'townname')
 str(dat)
 # Classes ‘data.table’ and 'data.frame':	1200 obs. of  49 variables
+
+table(dat$townname)
+# There are 100 observations for each of the 12 towns
+table(dat$asthma) #Most people in the study population don't have asthma (998 without asthma vs 171 with asthma)
+table(dat$male) # We have a relatively even spread of males and females (610 females, 590 males)
+
+hist(dat$fev) # FEV is normally distributed with a mean FEV of 2031.3
+summary(dat$fev)
+hist(dat$pm25_mass)
+unique(dat$pm25_mass)
+# There are 12 unique values of pM25_mass, 12 unique towns for 1 value for each town 
+summary(dat$pm25_mass)
 ```
 
 ## NEED TO IMPUTE STILL
 
-dat\[, temp_imp := fcoalesce(temp, mean(temp, na.rm = TRUE)),
- by = .(STATE, year, month, day)\]
+we want to have 4 imputation groups. 1 for hispanic males, 1 for hispanic females, 1 for non hispanic males, and 1 for non Hispanic females. For continous variables we will take the mean for each group and impute any NAs within their respective groups. We will do the same for categorical variables expect we will use mode.
+
+dat\[, temp_imp := fcoalesce(temp, mean(temp, na.rm = TRUE)), by = .(STATE, year, month, day)\]
 
 ```{r}
-dat[, temp_imp := fcoalesce(temp, mean(temp, na.rm = TRUE)),
-    by = .(STATE, year, month, day)]
+dat[, Mode(mother_asthma, na.rm = TRUE), by = .(hispanic, male)]
+
+dat[,mean(fev, na.rm = TRUE), by = .(hispanic, male)]
+```
+
+```{r}
+#example for continuous
+dat[, fev := fcoalesce(fev, mean(fev, na.rm = TRUE)),
+    by = .(hispanic, male)]
+# categorical
+dat[, mother_asthma := fcoalesce(mother_asthma, Mode(mother_asthma, na.rm = TRUE)),by = .(hispanic, male)]
+#dat
+```
+
+```{r}
+cat_vars = c('asthma', 'active_asthma', 'father_asthma','mother_asthma','wheeze','hayfever','allergy','educ_parent','smoke','pets','gasstove')
+
+cont_vars = c('agepft','height','weight','bmi','fev','fvc','mmef')
+
+
+# cant get for loop to work
+#for (var in cat_vars){
+ # dat[, var := fcoalesce(var, Mode(var, na.rm = TRUE)),by = .(hispanic, male)]
+#}
+```
+
+for (var in cat_vars){ dat\[, var := fcoalesce(var, Mode(var, na.rm = TRUE)),by = .(hispanic, male)\] }
+
+```{r}
+#| echo: false
+#categorical 
+dat[, asthma := fcoalesce(asthma, Mode(asthma, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, active_asthma := fcoalesce(active_asthma, Mode(active_asthma, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, father_asthma := fcoalesce(father_asthma, Mode(father_asthma, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, mother_asthma := fcoalesce(mother_asthma, Mode(mother_asthma, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, wheeze := fcoalesce(wheeze, Mode(wheeze, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, hayfever := fcoalesce(hayfever, Mode(hayfever, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, allergy := fcoalesce(allergy, Mode(allergy, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, educ_parent := fcoalesce(educ_parent, Mode(educ_parent, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, smoke := fcoalesce(smoke, Mode(smoke, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, pets := fcoalesce(pets, Mode(pets, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, gasstove := fcoalesce(gasstove, Mode(gasstove, na.rm = TRUE)), by = .(hispanic, male)]
+
+
+#continuous
+dat[, agepft := fcoalesce(agepft, mean(agepft, na.rm = TRUE)), by = .(hispanic, male)]
+#dat[, height := fcoalesce(height, mean(height, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, height := fcoalesce(as.double(height), mean(as.double(height), na.rm = TRUE)), by = .(hispanic, male)]
+
+dat[, weight := fcoalesce(as.double(weight), mean(as.double(weight), na.rm = TRUE)), by = .(hispanic, male)]
+dat[, bmi := fcoalesce(bmi, mean(bmi, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, fev := fcoalesce(fev, mean(fev, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, fvc := fcoalesce(fvc, mean(fvc, na.rm = TRUE)), by = .(hispanic, male)]
+dat[, mmef := fcoalesce(mmef, mean(mmef, na.rm = TRUE)), by = .(hispanic, male)]
+
 ```
 
 ### bmi categories
 
 ```{r}
-# works but need to update after imputation
+
 dat <- dat %>%
   mutate(
     obesity_level = case_when(
@@ -67,7 +138,21 @@ dat <- dat %>%
            TRUE ~ 'NA'
          )) %>%
   collect()
-dat
+
+```
+
+To make sure the variable is rightly coded, create a summary table that contains the minimum BMI, maximum BMI, and the total number of observations per category:
+
+```{r}
+summary_table <- dat %>%
+  group_by(obesity_level) %>%
+  summarize(
+    min_bmi = min(bmi),
+    max_bmi = max(bmi),
+    total_observations = n()
+  )
+
+summary_table
 ```
 
 smoke_gas_exposure
@@ -85,50 +170,334 @@ dat <- dat %>%
            smoke ==0 & gasstove==1 ~ 'exp_gas',
            smoke ==0 & gasstove==0 ~ 'exp_none',
            TRUE ~ 'NA'
-         )) 
+         )) %>%
+  collect()
 
 
 
 ```
+
+```{r}
+summary_exp <- dat %>%
+  group_by(smoke_gas_exposure) %>%
+  summarize(
+    total_observations = n()
+  )
+
+summary_exp
+```
+
+Create four summary tables showing the average (or proportion, if binary) and sd of \"Forced expiratory volume in 1 second (ml)\" (an asthma indicator) by town, sex, obesity level, and \"smoke_gas_exposure.\"
+
+# IS THIS CORRECT? why proportion?
+
+```{r}
+sumtab1 <- dat %>%
+  group_by(townname) %>%
+  summarize(
+    min_fev = min(fev),
+    max_fev = max(fev),
+    mean_fev_t = mean(fev),
+    sd_fev_t = sd(fev),
+    total_observations = n()
+  )
+sumtab1
+
+sumtab2 <- dat %>%
+  summarize(
+    total_observations = n(),
+    prop_male = sum(male == 1) / n(),
+    prop_female = sum(male == 0) / n()
+  )
+sumtab2
+
+sumtabmale <- dat %>%
+  group_by(male) %>%
+  summarize(
+    min_fev = min(fev),
+    max_fev = max(fev),
+    mean_fev_t = mean(fev),
+    sd_fev_t = sd(fev),
+    total_observations = n()
+  )
+sumtabmale
+
+sumtab3 <- dat %>%
+  group_by(obesity_level) %>%
+  summarize(
+    min_fev = min(fev),
+    max_fev = max(fev),
+    mean_fev_t = mean(fev),
+    sd_fev_t = sd(fev),
+    total_observations = n()
+  )
+sumtab3
+
+
+sumtab4 <- dat %>%
+  group_by(smoke_gas_exposure) %>%
+  summarize(
+    min_fev = min(fev),
+    max_fev = max(fev),
+    mean_fev_t = mean(fev),
+    sd_fev_t = sd(fev),
+    total_observations = n()
+  )
+sumtab4
+```
+
+```{r}
+#explaratory 
+
+table(dat$asthma) #Most people in the study population don't have asthma (1029 without asthma vs 171 with asthma)
+table(dat$male) # We have a relatively even spread of males and females (610 females, 590 males)
+
+
+summary(dat$fev)
+summary(dat$pm25_mass)
+summary(dat$bmi)
+summary(dat$smoke_gas_exposure)
+
+
+
+
+hist(dat$fev, main = "Histogram of FEV", xlab = "FEV Values", ylab = "Frequency") # FEV is normally distributed with a mean FEV of 2031.3
+hist(dat$pm25_mass, main = "Histogram of PM2.5 Mass", xlab = "PM2.5 Mass Values", ylab = "Frequency")
+
+ggplot(data = dat, aes(x = townname, y = pm25_mass)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Town", y = "PM2.5 Mass") +
+  theme_minimal()
+
+table(dat$smoke_gas_exposure)
+data_counts <- data.frame(
+  exposure = c("exp_both", "exp_gas", "exp_none", "exp_smoke"),
+  count = c(154, 791, 219, 36)
+)
+ggplot(data = data_counts, aes(x = exposure, y = count)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Exposure Type", y = "Count") +
+  theme_minimal()
+
+hist(dat$bmi, main = "Histogram of BMI", xlab = "BMI Values", ylab = "Frequency")
+table(dat$obesity_level)
+obesity_counts <- data.frame(
+  exposure = c("normal", "obese", "overweight", "underweight"),
+  count = c(975, 103, 87, 35)
+)
+ggplot(data = obesity_counts, aes(x = exposure, y = count)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Obesity Level", y = "Count") +
+  theme_minimal()
+
+unique(dat$pm25_mass)
+# There are 12 unique values of pM25_mass, 12 unique towns for 1 value for each town 
+
+
+```
+
+```{r}
+
+cont_vars <- c("fev", "bmi", "pm25_mass")  
+subset_dat <- dat[, ..cont_vars]
+correlation_matrix <- cor(subset_dat)
+
+correlation_matrix
+
+
+model_obese <- lm(fev ~ obesity_level, data = dat)
+summary(model_obese)
+model_exp <- lm(fev ~ smoke_gas_exposure, data = dat)
+summary(model_exp)
+model_pm25 <- lm(fev ~ pm25_mass, data = dat)
+summary(model_pm25)
+```
+
+## **Visualization**
+
+### 1. Facet plot showing scatterplots with regression lines of BMI vs FEV by "townname".
 
 ```{r}
 ggplot(dat, aes(x=bmi, y=fev)) +
   geom_point() +
   geom_smooth(method="lm") +
-  facet_wrap(~townname, nrow=3) 
+  facet_wrap(~townname, nrow=3) +
+  labs(x = "BMI", y = "FEV", title = "Relationship Between BMI and FEV by Town")
 
 ```
+
+According to the plots it looks like most towns have a slightly positive correlation between BMI and FEV. Riverside, Alpine, and Lompoc have weak positive correlations.
+
+### 2. Stacked histograms of FEV by BMI category and FEV by smoke/gas exposure. Use different color schemes than the ggplot default.
 
 ```{r}
 ggplot(dat, aes(x=fev, fill=obesity_level)) +
   geom_histogram() +
-  scale_fill_brewer(palette = 'Purples')
+  scale_fill_brewer(palette = 'Purples')+
+  labs(x = "FEV Value", y = "Frequency", title = "FEV Distribution by Obesity Level")
 ```
+
+This graph displays the range of FEV values. The color represents the obesity level categories. We can see that those in underweight category have lower FEV values compared to the other obesity categories. The normal obesity group is centered around the mean FEV, while overweight and obese have higher FEV values.
 
 ```{r}
 ggplot(dat, aes(x=fev, fill=smoke_gas_exposure)) +
   geom_histogram() +
-  scale_fill_brewer(palette = 'PRGn')
+  scale_fill_brewer(palette = 'PRGn')+
+  labs(x = "FEV Value", y = "Frequency", title = "FEV Distribution by Smoke and Gas Exposure")
 ```
 
+In this graph we are visualizing the distribution of FEV values among different exposure categories. It appears that the FEV distribution is about the same across all categories.
+
+### 3. Barchart of BMI by smoke/gas exposure.
+
 ```{r}
-ggplot(dat, aes(x=smoke_gas_exposure, y=bmi, fill=as.factor(smoke_gas_exposure))) +
-#  geom_bar(stat = "identity") +
-  geom_bar(stat = "summary", fill = "dodgerblue" ) +
-#  scale_fill_brewer(palette = "Set1") +
+# this isnt right
+ggplot(dat, aes(x=smoke_gas_exposure, y=mean(bmi), fill=smoke_gas_exposure)) +
+  geom_bar(stat = "identity") +
   labs(
     title = "BMI by Smoke/Gas Exposure",
     x = "Smoke/Gas Exposure",
     y = "Mean BMI"
   ) +
     theme_minimal()
+
+```
+
+```{r}
+mean_bmi <- dat %>%
+  group_by(smoke_gas_exposure) %>%
+  summarize(mean_bmi = mean(bmi, na.rm = TRUE))
+
+
+
+```
+
+Here we are comparing the average BMI values across different levels of smoke/gas exposure.
+
+### 4. Statistical summary graphs of FEV by BMI and FEV by smoke/gas exposure category.
+
+```{r}
+obesity_order <- c("underweight", "normal", "overweight", "obese")
+ggplot(dat, aes(x = factor(obesity_level, levels = obesity_order), y = fev)) +
+  geom_boxplot() +
+  labs(
+    title = "FEV by Obesity Levels",
+    x = "Obesity Level",
+    y = "FEV"
+  ) +
+  theme_minimal()
+```
+
+Here we can see that FEV increases as Obesity Level increases.
+
+```{r}
+exposure_order <- c("exp_none", "exp_gas", "exp_smoke", "exp_both")
+ggplot(dat, aes(x = factor(smoke_gas_exposure, levels = exposure_order), y = fev)) +
+  geom_boxplot() +
+  labs(
+    title = "FEV by Smoke/Gas Exposure",
+    x = "Smoke/Gas Exposure Category",
+    y = "FEV"
+  ) +
+  theme_minimal()
+```
+
+FEV levels are relatively similar across smoke/gas exposure groups. We actually see some higher points for the none exposure.
+
+```{r}
+ggplot(dat, aes(x = cut(bmi, breaks = seq(0, 50, by = 5)), y = fev)) +
+  geom_boxplot() +
+  labs(
+    title = "FEV by BMI",
+    x = "BMI Categories",
+    y = "FEV"
+  ) +
+  theme_minimal()
+```
+
+### 5. A leaflet map showing the concentrations of PM2.5 mass in each of the CHS communities.
+
+```{r}
+
+paletteNum <- colorNumeric(c('darkgreen','goldenrod','brown'), domain = dat$pm25_mass)
+
+
+leaflet(dat) %>% 
+  addProviderTiles('CartoDB.Positron') %>% 
+  addCircles(lat = ~lat, lng = ~lon, opacity = 1, fillOpacity = 0.8, radius = 400, color = ~paletteNum(dat$pm25_mass)) %>%
+  addLegend(
+    pal = paletteNum,
+    values = ~dat$pm25_mass,
+    title = "PM2.5 Mass",
+    opacity = 1,
+    position = "bottomright",
+    labFormat = labelFormat(suffix = " µg/m³")
+  ) 
+
+```
+
+### 6. Choose a visualization to examine whether PM2.5 mass is associated with FEV.
+
+```{r}
+ggplot(dat, aes(x = pm25_mass, y = fev)) +
+  geom_point() +
+  labs(
+    x = "PM2.5 Mass (µg/m³)",
+    y = "FEV",
+    title = "Scatter Plot of PM2.5 Mass vs. FEV"
+  ) +
+  theme_minimal()
+
+ggplot(dat, aes(x = pm25_mass, y = fev)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +  # Add regression line
+  labs(
+    x = "PM2.5 Mass (µg/m³)",
+    y = "FEV",
+    title = "Scatter Plot of PM2.5 Mass vs. FEV"
+  ) +
+  theme_minimal()
 ```
 
 ```{r}
 ggplot(dat, aes(x=fev, y=pm25_mass)) +
-  geom_point()
+  geom_point() +
+  labs(x = "FEV (Forced Expiratory Volume)", y = "PM2.5 Mass", title = "Relationship Between FEV and PM2.5 Mass")
 ```
 
 ```{r}
-dat
+ggplot(dat, aes(x=smoke_gas_exposure, y=fev)) +
+  geom_point() +
+  geom_smooth(method="lm") +
+  facet_wrap(~townname, nrow=3) +
+  labs(x = "smoke_gas_exposure", y = "FEV", title = "Relationship Between smoke_gas_exposure and FEV by Town") 
+
+ggplot(dat, aes(x=smoke_gas_exposure, y=fev)) +
+  geom_point() +
+  labs(x = "Smoke and Gas Exposure", y = "FEV", title = "Relationship Between Smoke and Gas Exposure and FEV") 
+```
+
+```{r}
+cor(dat$pm25_mass, dat$fev)
+cor(dat$smoke, dat$fev)
+cor(dat$pm25_mass, dat$fev)
+cor(dat$weight, dat$fev)
+
+
+```
+
+```{r}
+ggplot(dat, aes(x = pm25_mass, y = fev)) +
+   geom_point() +
+   facet_wrap(~townname)
+
+oneway.test(fev ~pm25_mass,
+            data=dat)
+oneway.test(fev ~smoke,
+            data=dat)
+oneway.test(fev ~gasstove,
+            data=dat)
+
+cor(dat$fev, dat$bmi)
+
 ```
